@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import "./styles/index.css";
+import "./styles/idss-theme.css";
 
 const STORAGE_KEY = "rosterly-workspace-data";
 const ACTIVE_VIEW_STORAGE_KEY = "rosterly-active-view";
