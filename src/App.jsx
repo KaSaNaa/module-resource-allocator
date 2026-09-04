@@ -256,6 +256,7 @@ function App() {
   const [notice, setNotice] = useState("");
   const [allocationAlgorithm, setAllocationAlgorithm] = useState("EXACT_DP");
   const [allocationResult, setAllocationResult] = useState(null);
+  const [assignmentPlan, setAssignmentPlan] = useState([]);
   const [comparisonResults, setComparisonResults] = useState([]);
   const [benchmarkResults, setBenchmarkResults] = useState([]);
 
@@ -285,18 +286,24 @@ function App() {
   const assignedThisWeek = jobs.filter((job) => job.assignedTo).length;
   const allocationItems = useMemo(
     () =>
-      jobs.map((job) => ({
-        id: job.id,
-        name: job.title,
-        cost: Math.max(
-          4,
-          job.skills.length * 4 +
-            (job.priority === "High" ? 4 : job.priority === "Medium" ? 2 : 0),
-        ),
-        value:
-          job.skills.length * 15 +
-          (job.priority === "High" ? 35 : job.priority === "Medium" ? 20 : 10),
-      })),
+      jobs
+        .filter((job) => !job.assignedTo)
+        .map((job) => ({
+          id: job.id,
+          name: job.title,
+          cost: Math.max(
+            4,
+            job.skills.length * 4 +
+              (job.priority === "High" ? 4 : job.priority === "Medium" ? 2 : 0),
+          ),
+          value:
+            job.skills.length * 15 +
+            (job.priority === "High"
+              ? 35
+              : job.priority === "Medium"
+                ? 20
+                : 10),
+        })),
     [jobs],
   );
   const availableCapacity = Math.max(40, availableCount * 8);
@@ -330,6 +337,36 @@ function App() {
       availableCapacity,
     );
     setAllocationResult({ ...result, algorithm: allocationAlgorithm });
+    const remainingEmployees = employees.filter(
+      (employee) => employee.status === "Available",
+    );
+    const plan = result.selectedItems.map((item) => {
+      const job = jobs.find((candidate) => candidate.id === item.id);
+      const rankedEmployees = remainingEmployees
+        .map((employee) => ({
+          employee,
+          matchedSkills: employee.skills.filter((skill) =>
+            job.skills.includes(skill),
+          ),
+        }))
+        .sort((a, b) => b.matchedSkills.length - a.matchedSkills.length);
+      const bestMatch = rankedEmployees[0];
+      if (!bestMatch || bestMatch.matchedSkills.length === 0) {
+        return { job, employee: null, matchedSkills: [] };
+      }
+      remainingEmployees.splice(
+        remainingEmployees.findIndex(
+          (employee) => employee.id === bestMatch.employee.id,
+        ),
+        1,
+      );
+      return {
+        job,
+        employee: bestMatch.employee,
+        matchedSkills: bestMatch.matchedSkills,
+      };
+    });
+    setAssignmentPlan(plan);
     setComparisonResults([]);
     setNotice(
       `${allocationAlgorithms[allocationAlgorithm].label} completed within the ${availableCapacity}-hour capacity.`,
@@ -358,6 +395,7 @@ function App() {
       })),
     );
     setAllocationResult(null);
+    setAssignmentPlan([]);
     setNotice(
       "All three approaches have been compared using the same work plan.",
     );
@@ -832,6 +870,38 @@ function App() {
                     </span>
                   ))}
                 </div>
+                {assignmentPlan.length > 0 && (
+                  <div className="assignment-plan">
+                    <div className="plan-heading">
+                      <div>
+                        <h3>Recommended assignment plan</h3>
+                        <p>
+                          Each selected job is matched to one available
+                          employee.
+                        </p>
+                      </div>
+                    </div>
+                    {assignmentPlan.map((assignment) => (
+                      <div className="assignment-row" key={assignment.job.id}>
+                        <span>
+                          <strong>{assignment.job.title}</strong>
+                          <small>{assignment.job.skills.join(" · ")}</small>
+                        </span>
+                        <span
+                          className={
+                            assignment.employee
+                              ? "planned-employee"
+                              : "unassigned"
+                          }
+                        >
+                          {assignment.employee
+                            ? `${assignment.employee.name} · ${assignment.matchedSkills.length} skill${assignment.matchedSkills.length === 1 ? "" : "s"} match`
+                            : "No suitable employee available"}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 {allocationResult.convergenceHistory && (
                   <div className="convergence">
                     <h3>Genetic convergence history</h3>
