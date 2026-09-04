@@ -673,7 +673,7 @@ function App() {
                     </tr>
                   </thead>
                   <tbody>
-                    {employees.slice(0, 5).map((employee) => (
+                    {employees.map((employee) => (
                       <tr key={employee.id}>
                         <td>
                           <span className="table-person">
