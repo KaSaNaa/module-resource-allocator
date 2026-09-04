@@ -141,6 +141,53 @@ const solveGenetic = (items, capacity) => {
   };
 };
 
+const createOptimalAssignmentPlan = (selectedItems, jobs, employees) => {
+  const selectedJobs = selectedItems
+    .map((item) => jobs.find((job) => job.id === item.id))
+    .filter(Boolean);
+  const availableEmployees = employees.filter(
+    (employee) => employee.status === "Available",
+  );
+  const matchScores = selectedJobs.map((job) =>
+    availableEmployees.map(
+      (employee) =>
+        employee.skills.filter((skill) => job.skills.includes(skill)).length,
+    ),
+  );
+  const memo = new Map();
+  const findBest = (jobIndex, usedEmployees) => {
+    if (jobIndex === selectedJobs.length) return { score: 0, choices: [] };
+    const key = `${jobIndex}:${usedEmployees}`;
+    if (memo.has(key)) return memo.get(key);
+    let best = findBest(jobIndex + 1, usedEmployees);
+    best = { score: best.score, choices: [null, ...best.choices] };
+    matchScores[jobIndex].forEach((score, employeeIndex) => {
+      if (score === 0 || usedEmployees & (1 << employeeIndex)) return;
+      const next = findBest(jobIndex + 1, usedEmployees | (1 << employeeIndex));
+      const candidate = {
+        score: score + next.score,
+        choices: [employeeIndex, ...next.choices],
+      };
+      if (candidate.score > best.score) best = candidate;
+    });
+    memo.set(key, best);
+    return best;
+  };
+  const bestPlan = findBest(0, 0);
+  return selectedJobs.map((job, jobIndex) => {
+    const employeeIndex = bestPlan.choices[jobIndex];
+    const employee =
+      employeeIndex === null ? null : availableEmployees[employeeIndex];
+    return {
+      job,
+      employee,
+      matchedSkills: employee
+        ? employee.skills.filter((skill) => job.skills.includes(skill))
+        : [],
+    };
+  });
+};
+
 const starterEmployees = [
   {
     id: 1,
@@ -337,35 +384,11 @@ function App() {
       availableCapacity,
     );
     setAllocationResult({ ...result, algorithm: allocationAlgorithm });
-    const remainingEmployees = employees.filter(
-      (employee) => employee.status === "Available",
+    const plan = createOptimalAssignmentPlan(
+      result.selectedItems,
+      jobs,
+      employees,
     );
-    const plan = result.selectedItems.map((item) => {
-      const job = jobs.find((candidate) => candidate.id === item.id);
-      const rankedEmployees = remainingEmployees
-        .map((employee) => ({
-          employee,
-          matchedSkills: employee.skills.filter((skill) =>
-            job.skills.includes(skill),
-          ),
-        }))
-        .sort((a, b) => b.matchedSkills.length - a.matchedSkills.length);
-      const bestMatch = rankedEmployees[0];
-      if (!bestMatch || bestMatch.matchedSkills.length === 0) {
-        return { job, employee: null, matchedSkills: [] };
-      }
-      remainingEmployees.splice(
-        remainingEmployees.findIndex(
-          (employee) => employee.id === bestMatch.employee.id,
-        ),
-        1,
-      );
-      return {
-        job,
-        employee: bestMatch.employee,
-        matchedSkills: bestMatch.matchedSkills,
-      };
-    });
     setAssignmentPlan(plan);
     setComparisonResults([]);
     setNotice(
